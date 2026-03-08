@@ -26,6 +26,7 @@ import {
 } from "./chat-history-store";
 import { createChatSession } from "./chat-session";
 import { type ChatHistoryLimits } from "./chat-state";
+import { createDrawerControls } from "./drawer-controls";
 import { createErrorController } from "./error-controller";
 import { createHeaderController } from "./header-controller";
 import { createMetricsController } from "./metrics-controller";
@@ -250,8 +251,6 @@ const panelPortRuntime = createPanelPortRuntime<BgToPanel>({
     handleBgMessage(msg);
   },
 });
-let drawerAnimation: Animation | null = null;
-let advancedSettingsAnimation: Animation | null = null;
 let autoValue = false;
 let chatEnabledValue = defaultSettings.chatEnabled;
 let automationEnabledValue = defaultSettings.automationEnabled;
@@ -1371,6 +1370,13 @@ const refreshModelPresets = modelPresetsController.refreshPresets;
 const refreshModelsIfStale = modelPresetsController.refreshIfStale;
 const runRefreshFree = modelPresetsController.runRefreshFree;
 const isRefreshFreeRunning = modelPresetsController.isRefreshFreeRunning;
+const drawerControls = createDrawerControls({
+  drawerEl,
+  drawerToggleBtn,
+  advancedSettingsEl,
+  advancedSettingsBodyEl,
+  refreshModelsIfStale,
+});
 
 function applySlidesSummaryMarkdown(markdown: string) {
   if (!markdown.trim()) return;
@@ -2073,160 +2079,6 @@ function seedPlannedSlidesForRun(run: RunStart) {
   return true;
 }
 
-function toggleDrawer(force?: boolean, opts?: { animate?: boolean }) {
-  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
-  const animate = opts?.animate !== false && !reducedMotion;
-
-  const isOpen = !drawerEl.classList.contains("hidden");
-  const next = typeof force === "boolean" ? force : !isOpen;
-
-  drawerToggleBtn.classList.toggle("isActive", next);
-  drawerToggleBtn.setAttribute("aria-expanded", next ? "true" : "false");
-  drawerEl.setAttribute("aria-hidden", next ? "false" : "true");
-
-  if (next === isOpen) return;
-
-  const cleanup = () => {
-    drawerEl.style.removeProperty("height");
-    drawerEl.style.removeProperty("opacity");
-    drawerEl.style.removeProperty("transform");
-    drawerEl.style.removeProperty("overflow");
-  };
-
-  drawerAnimation?.cancel();
-  drawerAnimation = null;
-  cleanup();
-
-  if (!animate) {
-    drawerEl.classList.toggle("hidden", !next);
-    return;
-  }
-
-  if (next) {
-    drawerEl.classList.remove("hidden");
-    const targetHeight = drawerEl.scrollHeight;
-    drawerEl.style.height = "0px";
-    drawerEl.style.opacity = "0";
-    drawerEl.style.transform = "translateY(-6px)";
-    drawerEl.style.overflow = "hidden";
-
-    drawerAnimation = drawerEl.animate(
-      [
-        { height: "0px", opacity: 0, transform: "translateY(-6px)" },
-        { height: `${targetHeight}px`, opacity: 1, transform: "translateY(0px)" },
-      ],
-      { duration: 200, easing: "cubic-bezier(0.2, 0, 0, 1)" },
-    );
-    drawerAnimation.onfinish = () => {
-      drawerAnimation = null;
-      cleanup();
-    };
-    drawerAnimation.oncancel = () => {
-      drawerAnimation = null;
-    };
-    return;
-  }
-
-  const currentHeight = drawerEl.getBoundingClientRect().height;
-  drawerEl.style.height = `${currentHeight}px`;
-  drawerEl.style.opacity = "1";
-  drawerEl.style.transform = "translateY(0px)";
-  drawerEl.style.overflow = "hidden";
-
-  drawerAnimation = drawerEl.animate(
-    [
-      { height: `${currentHeight}px`, opacity: 1, transform: "translateY(0px)" },
-      { height: "0px", opacity: 0, transform: "translateY(-6px)" },
-    ],
-    { duration: 180, easing: "cubic-bezier(0.4, 0, 0.2, 1)" },
-  );
-  drawerAnimation.onfinish = () => {
-    drawerAnimation = null;
-    drawerEl.classList.add("hidden");
-    cleanup();
-  };
-  drawerAnimation.oncancel = () => {
-    drawerAnimation = null;
-  };
-}
-
-function toggleAdvancedSettings(force?: boolean, opts?: { animate?: boolean }) {
-  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
-  const animate = opts?.animate !== false && !reducedMotion;
-  const isOpen = advancedSettingsEl.open;
-  const next = typeof force === "boolean" ? force : !isOpen;
-
-  if (next === isOpen) {
-    if (next) refreshModelsIfStale();
-    return;
-  }
-
-  const cleanup = () => {
-    advancedSettingsBodyEl.style.removeProperty("height");
-    advancedSettingsBodyEl.style.removeProperty("opacity");
-    advancedSettingsBodyEl.style.removeProperty("transform");
-    advancedSettingsBodyEl.style.removeProperty("overflow");
-  };
-
-  advancedSettingsAnimation?.cancel();
-  advancedSettingsAnimation = null;
-  cleanup();
-
-  if (!animate) {
-    advancedSettingsEl.open = next;
-    if (next) refreshModelsIfStale();
-    return;
-  }
-
-  if (next) {
-    advancedSettingsBodyEl.style.height = "0px";
-    advancedSettingsBodyEl.style.opacity = "0";
-    advancedSettingsBodyEl.style.transform = "translateY(-6px)";
-    advancedSettingsBodyEl.style.overflow = "hidden";
-    advancedSettingsEl.open = true;
-
-    const targetHeight = advancedSettingsBodyEl.scrollHeight;
-    advancedSettingsAnimation = advancedSettingsBodyEl.animate(
-      [
-        { height: "0px", opacity: 0, transform: "translateY(-6px)" },
-        { height: `${targetHeight}px`, opacity: 1, transform: "translateY(0px)" },
-      ],
-      { duration: 200, easing: "cubic-bezier(0.2, 0, 0, 1)", fill: "both" },
-    );
-    advancedSettingsAnimation.onfinish = () => {
-      advancedSettingsAnimation = null;
-      cleanup();
-      refreshModelsIfStale();
-    };
-    advancedSettingsAnimation.oncancel = () => {
-      advancedSettingsAnimation = null;
-    };
-    return;
-  }
-
-  const currentHeight = advancedSettingsBodyEl.getBoundingClientRect().height;
-  advancedSettingsBodyEl.style.height = `${currentHeight}px`;
-  advancedSettingsBodyEl.style.opacity = "1";
-  advancedSettingsBodyEl.style.transform = "translateY(0px)";
-  advancedSettingsBodyEl.style.overflow = "hidden";
-
-  advancedSettingsAnimation = advancedSettingsBodyEl.animate(
-    [
-      { height: `${currentHeight}px`, opacity: 1, transform: "translateY(0px)" },
-      { height: "0px", opacity: 0, transform: "translateY(-6px)" },
-    ],
-    { duration: 180, easing: "cubic-bezier(0.4, 0, 0.2, 1)", fill: "both" },
-  );
-  advancedSettingsAnimation.onfinish = () => {
-    advancedSettingsAnimation = null;
-    advancedSettingsEl.open = false;
-    cleanup();
-  };
-  advancedSettingsAnimation.oncancel = () => {
-    advancedSettingsAnimation = null;
-  };
-}
-
 function resetChatState() {
   panelState.chatStreaming = false;
   chatController.reset();
@@ -2406,9 +2258,9 @@ bindSidepanelUiEvents({
   lineHeightStep: LINE_HEIGHT_STEP,
   sendSummarize,
   clearCurrentView,
-  toggleDrawer: () => toggleDrawer(),
+  toggleDrawer: () => drawerControls.toggleDrawer(),
   openOptions: () => send({ type: "panel:openOptions" }),
-  toggleAdvancedSettings,
+  toggleAdvancedSettings: drawerControls.toggleAdvancedSettings,
   sendChatMessage,
   bumpFontSize,
   bumpLineHeight,
@@ -2420,7 +2272,7 @@ bindSidepanelUiEvents({
     })();
   },
   refreshModelsIfStale: () => {
-    if (advancedSettingsAnimation && advancedSettingsEl.open) return;
+    if (drawerControls.hasAdvancedSettingsAnimation() && advancedSettingsEl.open) return;
     refreshModelsIfStale();
   },
   runRefreshFree,
@@ -2451,7 +2303,7 @@ void (async () => {
   setModelPlaceholderFromDiscovery({});
   updateModelRowUI();
   modelRefreshBtn.disabled = !s.token.trim();
-  toggleDrawer(false, { animate: false });
+  drawerControls.toggleDrawer(false, { animate: false });
   renderMarkdownDisplay();
   void send({ type: "panel:ready" });
   scheduleAutoKick();
