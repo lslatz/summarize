@@ -5,24 +5,14 @@ import {
   patchSettings,
   saveSettings,
 } from "../apps/chrome-extension/src/lib/settings.js";
-
-type Storage = Record<string, unknown>;
+import { installChromeStorage } from "./helpers/chrome-storage.js";
 
 describe("chrome/settings", () => {
-  let storage: Storage;
+  let storage: Record<string, unknown>;
 
   beforeEach(() => {
     storage = {};
-    (globalThis as unknown as { chrome: unknown }).chrome = {
-      storage: {
-        local: {
-          get: async (key: string) => ({ [key]: storage[key] }),
-          set: async (obj: Record<string, unknown>) => {
-            Object.assign(storage, obj);
-          },
-        },
-      },
-    };
+    installChromeStorage(storage, "local");
   });
 
   it("loads defaults when storage is empty", async () => {

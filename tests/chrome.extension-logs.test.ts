@@ -1,27 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-type StoredValues = Record<string, unknown>;
+import { installChromeStorage } from "./helpers/chrome-storage.js";
 
 const LOG_KEY = "summarize:extension-logs";
-
-function installChromeStorage(
-  target: StoredValues,
-  mode: "session" | "local" | "none" = "session",
-) {
-  if (mode === "none") {
-    (globalThis as unknown as { chrome: unknown }).chrome = { storage: {} };
-    return;
-  }
-  const store = {
-    get: async (key: string) => ({ [key]: target[key] }),
-    set: async (value: Record<string, unknown>) => {
-      Object.assign(target, value);
-    },
-  };
-  (globalThis as unknown as { chrome: unknown }).chrome = {
-    storage: mode === "session" ? { session: store, local: store } : { local: store },
-  };
-}
 
 describe("chrome/extension-logs", () => {
   beforeEach(() => {
@@ -52,7 +32,7 @@ describe("chrome/extension-logs", () => {
   });
 
   it("flushes queued lines, normalizes details, and reads a rounded tail", async () => {
-    const storage: StoredValues = {};
+    const storage: Record<string, unknown> = {};
     installChromeStorage(storage, "session");
     const { logExtensionEvent, readExtensionLogs } =
       await import("../apps/chrome-extension/src/lib/extension-logs.js");
@@ -94,7 +74,7 @@ describe("chrome/extension-logs", () => {
   });
 
   it("falls back to local storage, flushes immediately at batch size, and trims stored history", async () => {
-    const storage: StoredValues = {};
+    const storage: Record<string, unknown> = {};
     installChromeStorage(storage, "local");
     const { logExtensionEvent, readExtensionLogs } =
       await import("../apps/chrome-extension/src/lib/extension-logs.js");
@@ -116,7 +96,7 @@ describe("chrome/extension-logs", () => {
   });
 
   it("caps oversized log lines and ignores invalid last-line timestamps", async () => {
-    const storage: StoredValues = {};
+    const storage: Record<string, unknown> = {};
     installChromeStorage(storage, "session");
     const { logExtensionEvent, readExtensionLogs } =
       await import("../apps/chrome-extension/src/lib/extension-logs.js");
