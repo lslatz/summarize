@@ -12,9 +12,8 @@ import {
   patchSettings,
   type SlidesLayout,
 } from "../../lib/settings";
-import { applyTheme } from "../../lib/theme";
 import { generateToken } from "../../lib/token";
-import { mountCheckbox } from "../../ui/zag-checkbox";
+import { createAppearanceControls } from "./appearance-controls";
 import { handleSidepanelBgMessage } from "./bg-message-runtime";
 import { bindSettingsStorage, bindSidepanelLifecycle, bindSidepanelUiEvents } from "./bindings";
 import { runChatAgentLoop } from "./chat-agent-loop";
@@ -34,11 +33,7 @@ import { createModelPresetsController } from "./model-presets";
 import { createNavigationRuntime } from "./navigation-runtime";
 import { createPanelCacheController, type PanelCachePayload } from "./panel-cache";
 import { createPanelPortRuntime } from "./panel-port";
-import {
-  mountSidepanelLengthPicker,
-  mountSidepanelPickers,
-  mountSummarizeControl,
-} from "./pickers";
+import { mountSummarizeControl } from "./pickers";
 import {
   normalizePanelUrl,
   panelUrlsMatch,
@@ -315,7 +310,7 @@ const pendingSummaryRunsByUrl = new Map<string, RunStart>();
 const pendingSlidesRunsByUrl = new Map<string, { runId: string; url: string }>();
 const slidesTextController = createSlidesTextController({
   getSlides: () => panelState.slides?.slides ?? null,
-  getLengthValue: () => pickerSettings.length,
+  getLengthValue: () => appearanceControls.getLengthValue(),
   getSlidesOcrEnabled: () => slidesOcrEnabledValue,
 });
 
@@ -1302,64 +1297,22 @@ function renderInlineSlides(container: HTMLElement, opts?: { fallback?: boolean 
 
 const LINE_HEIGHT_STEP = 0.1;
 
-let pickerSettings = {
-  scheme: defaultSettings.colorScheme,
-  mode: defaultSettings.colorMode,
-  fontFamily: defaultSettings.fontFamily,
-  length: defaultSettings.length,
-};
-
-const pickerHandlers = {
-  onSchemeChange: (value) => {
-    void (async () => {
-      const next = await patchSettings({ colorScheme: value });
-      pickerSettings = { ...pickerSettings, scheme: next.colorScheme, mode: next.colorMode };
-      applyTheme({ scheme: next.colorScheme, mode: next.colorMode });
-    })();
-  },
-  onModeChange: (value) => {
-    void (async () => {
-      const next = await patchSettings({ colorMode: value });
-      pickerSettings = { ...pickerSettings, scheme: next.colorScheme, mode: next.colorMode };
-      applyTheme({ scheme: next.colorScheme, mode: next.colorMode });
-    })();
-  },
-  onFontChange: (value) => {
-    void (async () => {
-      const next = await patchSettings({ fontFamily: value });
-      pickerSettings = { ...pickerSettings, fontFamily: next.fontFamily };
-      typographyController.apply(next.fontFamily, next.fontSize, next.lineHeight);
-      typographyController.setCurrentFontSize(next.fontSize);
-      typographyController.setCurrentLineHeight(next.lineHeight);
-    })();
-  },
-  onLengthChange: (value) => {
-    pickerSettings = { ...pickerSettings, length: value };
-    void send({ type: "panel:setLength", value });
-  },
-};
-
-const pickers = mountSidepanelPickers(pickersRoot, {
-  scheme: pickerSettings.scheme,
-  mode: pickerSettings.mode,
-  fontFamily: pickerSettings.fontFamily,
-  onSchemeChange: pickerHandlers.onSchemeChange,
-  onModeChange: pickerHandlers.onModeChange,
-  onFontChange: pickerHandlers.onFontChange,
-});
-
-const lengthPicker = mountSidepanelLengthPicker(lengthRoot, {
-  length: pickerSettings.length,
-  onLengthChange: pickerHandlers.onLengthChange,
-});
-
-const autoToggle = mountCheckbox(autoToggleRoot, {
-  id: "sidepanel-auto",
-  label: "Auto summarize",
-  checked: autoValue,
-  onCheckedChange: (checked) => {
+const appearanceControls = createAppearanceControls({
+  autoToggleRoot,
+  pickersRoot,
+  lengthRoot,
+  patchSettings,
+  sendSetAuto: (checked) => {
     autoValue = checked;
     void send({ type: "panel:setAuto", value: checked });
+  },
+  sendSetLength: (value) => {
+    void send({ type: "panel:setLength", value });
+  },
+  applyTypography: (fontFamily, fontSize, lineHeight) => {
+    typographyController.apply(fontFamily, fontSize, lineHeight);
+    typographyController.setCurrentFontSize(fontSize);
+    typographyController.setCurrentLineHeight(lineHeight);
   },
 });
 
@@ -1434,7 +1387,7 @@ function applySlidesSummaryMarkdown(markdown: string) {
   }
   let output = markdown;
   if (panelState.slides?.slides.length) {
-    const lengthArg = resolveSlidesLengthArg(pickerSettings.length);
+    const lengthArg = resolveSlidesLengthArg(appearanceControls.getLengthValue());
     const timeline: SlideTimelineEntry[] = panelState.slides.slides.map((slide) => ({
       index: slide.index,
       timestamp: Number.isFinite(slide.timestamp) ? slide.timestamp : Number.NaN,
@@ -1817,15 +1770,7 @@ function updateControls(state: UiState) {
   }
 
   autoValue = state.settings.autoSummarize;
-  autoToggle.update({
-    id: "sidepanel-auto",
-    label: "Auto summarize",
-    checked: autoValue,
-    onCheckedChange: (checked) => {
-      autoValue = checked;
-      void send({ type: "panel:setAuto", value: checked });
-    },
-  });
+  appearanceControls.setAutoValue(autoValue);
   chatEnabledValue = state.settings.chatEnabled;
   automationEnabledValue = state.settings.automationEnabled;
   slidesEnabledValue = state.settings.slidesEnabled;
@@ -1861,12 +1806,7 @@ function updateControls(state: UiState) {
   if (chatEnabledValue && activeTabId && chatController.getMessages().length === 0) {
     void restoreChatHistory();
   }
-  if (pickerSettings.length !== state.settings.length) {
-    pickerSettings = { ...pickerSettings, length: state.settings.length };
-    lengthPicker.update({
-      length: pickerSettings.length,
-      onLengthChange: pickerHandlers.onLengthChange,
-    });
+  if (appearanceControls.syncLengthFromState(state.settings.length)) {
     rebuildSlideDescriptions();
     if (panelState.summaryMarkdown) {
       renderInlineSlides(renderMarkdownHostEl, { fallback: true });
@@ -1877,7 +1817,7 @@ function updateControls(state: UiState) {
     state.settings.lineHeight !== typographyController.getCurrentLineHeight()
   ) {
     typographyController.apply(
-      pickerSettings.fontFamily,
+      appearanceControls.getFontFamily(),
       state.settings.fontSize,
       state.settings.lineHeight,
     );
@@ -2083,7 +2023,7 @@ function seedPlannedSlidesForRun(run: RunStart) {
     return false;
   }
 
-  const normalized = pickerSettings.length.trim().toLowerCase();
+  const normalized = appearanceControls.getLengthValue().trim().toLowerCase();
   const chunkSeconds =
     normalized === "short"
       ? 600
@@ -2502,42 +2442,15 @@ void (async () => {
   slidesLayoutValue = s.slidesLayout;
   slidesLayoutEl.value = slidesLayoutValue;
   if (!automationEnabledValue) hideAutomationNotice();
-  autoToggle.update({
-    id: "sidepanel-auto",
-    label: "Auto summarize",
-    checked: autoValue,
-    onCheckedChange: (checked) => {
-      autoValue = checked;
-      void send({ type: "panel:setAuto", value: checked });
-    },
-  });
+  appearanceControls.setAutoValue(autoValue);
   applyChatEnabled();
   applySlidesLayout();
-  pickerSettings = {
-    scheme: s.colorScheme,
-    mode: s.colorMode,
-    fontFamily: s.fontFamily,
-    length: s.length,
-  };
-  pickers.update({
-    scheme: pickerSettings.scheme,
-    mode: pickerSettings.mode,
-    fontFamily: pickerSettings.fontFamily,
-    onSchemeChange: pickerHandlers.onSchemeChange,
-    onModeChange: pickerHandlers.onModeChange,
-    onFontChange: pickerHandlers.onFontChange,
-  });
-  lengthPicker.update({
-    length: pickerSettings.length,
-    onLengthChange: pickerHandlers.onLengthChange,
-  });
+  appearanceControls.initializeFromSettings(s);
   setDefaultModelPresets();
   setModelValue(s.model);
   setModelPlaceholderFromDiscovery({});
   updateModelRowUI();
   modelRefreshBtn.disabled = !s.token.trim();
-  typographyController.apply(s.fontFamily, s.fontSize, s.lineHeight);
-  applyTheme({ scheme: s.colorScheme, mode: s.colorMode });
   toggleDrawer(false, { animate: false });
   renderMarkdownDisplay();
   void send({ type: "panel:ready" });
