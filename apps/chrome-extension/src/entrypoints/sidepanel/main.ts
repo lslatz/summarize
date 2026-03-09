@@ -52,8 +52,8 @@ import { createSlidesHydrator } from "./slides-hydrator";
 import { hasResolvedSlidesPayload } from "./slides-pending";
 import { createSlidesRunRuntime } from "./slides-run-runtime";
 import { shouldSeedPlannedSlidesForRun } from "./slides-seed-policy";
+import { createSlidesSummaryController } from "./slides-summary-controller";
 import {
-  resolveSlidesLengthArg,
   selectMarkdownForLayout,
   splitSlidesMarkdown,
   type SlideTextMode,
@@ -260,13 +260,6 @@ let slidesContextPending = false;
 let slidesContextUrl: string | null = null;
 let slidesSeededSourceId: string | null = null;
 let slidesAppliedRunId: string | null = null;
-let slidesSummaryRunId: string | null = null;
-let slidesSummaryUrl: string | null = null;
-let slidesSummaryMarkdown = "";
-let slidesSummaryPending: string | null = null;
-let slidesSummaryHadError = false;
-let slidesSummaryComplete = false;
-let slidesSummaryModel: string | null = null;
 let pendingRunForPlannedSlides: RunStart | null = null;
 const pendingSummaryRunsByUrl = new Map<string, RunStart>();
 const pendingSlidesRunsByUrl = new Map<string, { runId: string; url: string }>();
@@ -332,15 +325,7 @@ function setSlidesTranscriptTimedText(value: string | null) {
 }
 
 function stopSlidesSummaryStream() {
-  slidesSummaryController.abort();
-  slidesSummaryRunId = null;
-  slidesSummaryUrl = null;
-  slidesSummaryMarkdown = "";
-  slidesSummaryPending = null;
-  slidesSummaryHadError = false;
-  slidesSummaryComplete = false;
-  slidesSummaryModel = null;
-  slidesTextController.clearSummarySource();
+  slidesSummaryController.stop();
 }
 
 function resolveActiveSlidesRunId(): string | null {
@@ -920,21 +905,19 @@ const summaryViewRuntime = createSummaryViewRuntime({
   },
   resolveActiveSlidesRunId,
   getSlidesSummaryState: () => ({
-    runId: slidesSummaryRunId,
-    markdown: slidesSummaryMarkdown,
-    complete: slidesSummaryComplete,
-    model: slidesSummaryModel,
+    runId: slidesSummaryController.getRunId(),
+    markdown: slidesSummaryController.getMarkdown(),
+    complete: slidesSummaryController.getComplete(),
+    model: slidesSummaryController.getModel(),
   }),
   setSlidesSummaryState: (payload) => {
-    slidesSummaryMarkdown = payload.markdown;
-    slidesSummaryComplete = payload.complete;
-    slidesSummaryModel = payload.model;
+    slidesSummaryController.setSnapshot(payload);
   },
   clearSlidesSummaryPending: () => {
-    slidesSummaryPending = null;
+    slidesSummaryController.clearPending();
   },
   clearSlidesSummaryError: () => {
-    slidesSummaryHadError = false;
+    slidesSummaryController.clearError();
   },
   updateSlidesTextState,
   requestSlidesContext,
@@ -1080,9 +1063,9 @@ registerSidepanelTestHooks({
       timestamp: Number.isFinite(slide.timestamp) ? slide.timestamp : null,
     })) ?? [],
   getTranscriptTimedText: () => slidesTextController.getTranscriptTimedText(),
-  getSlidesSummaryMarkdown: () => slidesSummaryMarkdown,
-  getSlidesSummaryComplete: () => slidesSummaryComplete,
-  getSlidesSummaryModel: () => slidesSummaryModel,
+  getSlidesSummaryMarkdown: () => slidesSummaryController.getMarkdown(),
+  getSlidesSummaryComplete: () => slidesSummaryController.getComplete(),
+  getSlidesSummaryModel: () => slidesSummaryController.getModel(),
   getChatEnabled: () => chatEnabledValue,
   getSettingsHydrated: () => settingsHydrated,
   setTranscriptTimedText: (value) => {
@@ -1236,45 +1219,34 @@ const drawerControls = createDrawerControls({
   refreshModelsIfStale,
 });
 
+const slidesSummaryController = createSlidesSummaryController({
+  getToken: async () => (await loadSettings()).token,
+  friendlyFetchError,
+  panelUrlsMatch,
+  getPanelState: () => panelState,
+  getUiState: () => panelState.ui,
+  getActiveTabUrl: () => activeTabUrl,
+  getInputMode: () => inputMode,
+  getInputModeOverride: () => inputModeOverride,
+  getSlidesEnabled: () => slidesEnabledValue,
+  getLengthValue: () => appearanceControls.getLengthValue(),
+  getTranscriptTimedText: () => slidesTextController.getTranscriptTimedText(),
+  clearSummarySource: () => {
+    slidesTextController.clearSummarySource();
+  },
+  updateSlideSummaryFromMarkdown,
+  renderMarkdown,
+  renderInlineSlidesFallback: () => {
+    renderInlineSlides(renderMarkdownHostEl, { fallback: true });
+  },
+});
+
 function applySlidesSummaryMarkdown(markdown: string) {
-  if (!markdown.trim()) return;
-  const currentUrl = panelState.currentSource?.url ?? activeTabUrl ?? null;
-  if (slidesSummaryUrl && currentUrl && !panelUrlsMatch(slidesSummaryUrl, currentUrl)) return;
-  if (!slidesEnabledValue) {
-    slidesSummaryPending = markdown;
-    return;
-  }
-  const effectiveInputMode = inputModeOverride ?? inputMode;
-  if (effectiveInputMode !== "video") {
-    slidesSummaryPending = markdown;
-    return;
-  }
-  let output = markdown;
-  if (panelState.slides?.slides.length) {
-    const lengthArg = resolveSlidesLengthArg(appearanceControls.getLengthValue());
-    const timeline: SlideTimelineEntry[] = panelState.slides.slides.map((slide) => ({
-      index: slide.index,
-      timestamp: Number.isFinite(slide.timestamp) ? slide.timestamp : Number.NaN,
-    }));
-    output = coerceSummaryWithSlides({
-      markdown,
-      slides: timeline,
-      transcriptTimedText: slidesTextController.getTranscriptTimedText(),
-      lengthArg,
-    });
-  }
-  updateSlideSummaryFromMarkdown(output, { preserveIfEmpty: false, source: "slides" });
-  if (!panelState.summaryMarkdown?.trim()) {
-    renderMarkdown(output);
-  }
+  slidesSummaryController.applyMarkdown(markdown);
 }
 
 function maybeApplyPendingSlidesSummary() {
-  if (!slidesSummaryPending) return;
-  if (panelState.phase === "connecting" || panelState.phase === "streaming") return;
-  const markdown = slidesSummaryPending;
-  slidesSummaryPending = null;
-  applySlidesSummaryMarkdown(markdown);
+  slidesSummaryController.maybeApplyPending();
 }
 
 slidesHydrator = createSlidesHydrator({
@@ -1335,20 +1307,18 @@ const slidesRunRuntime = createSlidesRunRuntime({
   startSlidesSummaryController: (payload) => {
     void slidesSummaryController.start(payload);
   },
-  getSlidesSummaryRunId: () => slidesSummaryRunId,
+  getSlidesSummaryRunId: () => slidesSummaryController.getRunId(),
   setSlidesSummaryRunId: (value) => {
-    slidesSummaryRunId = value;
+    slidesSummaryController.setRunId(value);
   },
   setSlidesSummaryUrl: (value) => {
-    slidesSummaryUrl = value;
+    slidesSummaryController.setUrl(value);
   },
   resetSlidesSummaryState: () => {
-    slidesSummaryMarkdown = "";
-    slidesSummaryHadError = false;
-    slidesSummaryComplete = false;
+    slidesSummaryController.resetSummaryState();
   },
   setSlidesSummaryModel: (value) => {
-    slidesSummaryModel = value;
+    slidesSummaryController.setModel(value);
   },
   setSlidesRunId: (value) => {
     panelState.slidesRunId = value;
@@ -1363,54 +1333,6 @@ const {
   startSlidesStream,
   startSlidesSummaryStreamForRunId,
 } = slidesRunRuntime;
-
-const slidesSummaryController = createStreamController({
-  getToken: async () => (await loadSettings()).token,
-  onStatus: () => {},
-  onPhaseChange: () => {},
-  onMeta: (meta) => {
-    if (typeof meta.model === "string") {
-      slidesSummaryModel = meta.model;
-    }
-  },
-  idleTimeoutMs: 600_000,
-  idleTimeoutMessage: "Slides summary stalled. The daemon may have stopped.",
-  onRender: (markdown) => {
-    slidesSummaryMarkdown = markdown;
-    const effectiveInputMode = inputModeOverride ?? inputMode;
-    if (slidesEnabledValue && effectiveInputMode === "video" && panelState.slides) {
-      updateSlideSummaryFromMarkdown(markdown, { preserveIfEmpty: true, source: "slides" });
-      if (panelState.summaryMarkdown) {
-        renderInlineSlides(renderMarkdownHostEl, { fallback: true });
-      }
-    }
-  },
-  onReset: () => {
-    slidesSummaryMarkdown = "";
-    slidesSummaryPending = null;
-    slidesSummaryHadError = false;
-    slidesSummaryComplete = false;
-    slidesSummaryModel = panelState.lastMeta.model ?? panelState.ui?.settings.model ?? "auto";
-  },
-  onError: (err) => {
-    slidesSummaryHadError = true;
-    return friendlyFetchError(err, "Slides summary failed");
-  },
-  onDone: () => {
-    if (slidesSummaryHadError) {
-      slidesSummaryComplete = false;
-      return;
-    }
-    slidesSummaryComplete = true;
-    const markdown = slidesSummaryMarkdown;
-    if (!markdown.trim()) return;
-    if (panelState.phase === "connecting" || panelState.phase === "streaming") {
-      slidesSummaryPending = markdown;
-      return;
-    }
-    applySlidesSummaryMarkdown(markdown);
-  },
-});
 
 const streamController = createStreamController({
   getToken: async () => (await loadSettings()).token,
@@ -1663,8 +1585,8 @@ const bgMessageRuntime = createSidepanelBgMessageRuntime({
   setSlidesTranscriptTimedText,
   updateSlidesTextState,
   getSlidesSummaryState: () => ({
-    complete: slidesSummaryComplete,
-    markdown: slidesSummaryMarkdown,
+    complete: slidesSummaryController.getComplete(),
+    markdown: slidesSummaryController.getMarkdown(),
   }),
   updateSlideSummaryFromMarkdown,
   renderInlineSlidesFallback: () => {
