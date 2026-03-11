@@ -22,6 +22,7 @@ import {
   getPanelSlidesTimeline,
   getPanelSummaryMarkdown,
   waitForApplySlidesHook,
+  waitForSettingsHydratedHook,
   waitForSlidesRuntimeHooks,
 } from "./helpers/panel-hooks";
 
@@ -488,6 +489,7 @@ test("sidepanel keeps slide summaries isolated when switching YouTube videos mid
     });
     await waitForPanelPort(page);
     await waitForSlidesRuntimeHooks(page);
+    await waitForSettingsHydratedHook(page);
     await routePlaceholderSlideImages(page);
     const applyBgMessage = async (message: object) => {
       await page.evaluate((payload) => {

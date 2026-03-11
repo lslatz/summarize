@@ -55,6 +55,9 @@ function buildInitialState(): SlidesSummaryState {
 
 export function createSlidesSummaryController(options: SlidesSummaryControllerOptions) {
   let state = buildInitialState();
+  let activeGeneration = 0;
+
+  const isCurrentGeneration = (generation: number) => generation === activeGeneration;
 
   const getEffectiveInputMode = () => options.getInputModeOverride() ?? options.getInputMode();
   const getCurrentUrl = () =>
@@ -103,64 +106,77 @@ export function createSlidesSummaryController(options: SlidesSummaryControllerOp
     applyMarkdown(markdown);
   };
 
-  const streamController = createStreamController({
-    getToken: options.getToken,
-    onStatus: () => {},
-    onPhaseChange: () => {},
-    idleTimeoutMs: 600_000,
-    idleTimeoutMessage: "Slides summary stalled. The daemon may have stopped.",
-    onMeta: (meta) => {
-      if (typeof meta.model === "string") {
-        state.model = meta.model;
-      }
-    },
-    onRender: (markdown) => {
-      state.markdown = markdown;
-      if (options.getSlidesEnabled() && getEffectiveInputMode() === "video") {
-        options.updateSlideSummaryFromMarkdown(markdown, {
-          preserveIfEmpty: true,
-          source: "slides",
-        });
-        if (options.getPanelState().summaryMarkdown && options.getPanelState().slides) {
-          options.renderInlineSlidesFallback();
+  const createGenerationStreamController = (generation: number) =>
+    createStreamController({
+      getToken: options.getToken,
+      onStatus: () => {},
+      onPhaseChange: () => {},
+      idleTimeoutMs: 600_000,
+      idleTimeoutMessage: "Slides summary stalled. The daemon may have stopped.",
+      onMeta: (meta) => {
+        if (!isCurrentGeneration(generation)) return;
+        if (typeof meta.model === "string") {
+          state.model = meta.model;
         }
-      }
-    },
-    onReset: () => {
-      state.markdown = "";
-      state.pending = null;
-      state.hadError = false;
-      state.complete = false;
-      state.model = getFallbackModel();
-    },
-    onError: (error) => {
-      state.hadError = true;
-      return options.friendlyFetchError(error, "Slides summary failed");
-    },
-    onDone: () => {
-      if (state.hadError) {
+      },
+      onRender: (markdown) => {
+        if (!isCurrentGeneration(generation)) return;
+        state.markdown = markdown;
+        if (options.getSlidesEnabled() && getEffectiveInputMode() === "video") {
+          options.updateSlideSummaryFromMarkdown(markdown, {
+            preserveIfEmpty: true,
+            source: "slides",
+          });
+          if (options.getPanelState().summaryMarkdown && options.getPanelState().slides) {
+            options.renderInlineSlidesFallback();
+          }
+        }
+      },
+      onReset: () => {
+        if (!isCurrentGeneration(generation)) return;
+        state.markdown = "";
+        state.pending = null;
+        state.hadError = false;
         state.complete = false;
-        return;
-      }
-      state.complete = true;
-      const markdown = state.markdown;
-      if (!markdown.trim()) return;
-      const phase = options.getPanelState().phase;
-      if (phase === "connecting" || phase === "streaming") {
-        state.pending = markdown;
-        return;
-      }
-      applyMarkdown(markdown);
-    },
-  });
+        state.model = getFallbackModel();
+      },
+      onError: (error) => {
+        if (!isCurrentGeneration(generation)) return "";
+        state.hadError = true;
+        return options.friendlyFetchError(error, "Slides summary failed");
+      },
+      onDone: () => {
+        if (!isCurrentGeneration(generation)) return;
+        if (state.hadError) {
+          state.complete = false;
+          return;
+        }
+        state.complete = true;
+        const markdown = state.markdown;
+        if (!markdown.trim()) return;
+        const phase = options.getPanelState().phase;
+        if (phase === "connecting" || phase === "streaming") {
+          state.pending = markdown;
+          return;
+        }
+        applyMarkdown(markdown);
+      },
+    });
+
+  let streamController = createGenerationStreamController(activeGeneration);
 
   return {
     stop() {
+      activeGeneration += 1;
       streamController.abort();
+      streamController = createGenerationStreamController(activeGeneration);
       state = buildInitialState();
       options.clearSummarySource();
     },
     start(run: RunStart) {
+      activeGeneration += 1;
+      streamController.abort();
+      streamController = createGenerationStreamController(activeGeneration);
       return streamController.start(run);
     },
     getSnapshot(): SlidesSummarySnapshot {

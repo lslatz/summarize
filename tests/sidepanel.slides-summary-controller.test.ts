@@ -6,12 +6,14 @@ import type { PanelState, UiState } from "../apps/chrome-extension/src/entrypoin
 let streamOptions: StreamControllerOptions | null = null;
 let streamStartSpy: ReturnType<typeof vi.fn> | null = null;
 let streamAbortSpy: ReturnType<typeof vi.fn> | null = null;
+let streamAbortSpies: Array<ReturnType<typeof vi.fn>> = [];
 
 vi.mock("../apps/chrome-extension/src/entrypoints/sidepanel/stream-controller", () => ({
   createStreamController: (options: StreamControllerOptions) => {
     streamOptions = options;
     streamStartSpy = vi.fn(async () => {});
     streamAbortSpy = vi.fn();
+    streamAbortSpies.push(streamAbortSpy);
     return {
       start: streamStartSpy,
       abort: streamAbortSpy,
@@ -65,6 +67,7 @@ describe("slides summary controller", () => {
     streamOptions = null;
     streamStartSpy = null;
     streamAbortSpy = null;
+    streamAbortSpies = [];
   });
 
   it("defers markdown while slides are disabled and applies it later", () => {
@@ -357,6 +360,6 @@ describe("slides summary controller", () => {
     });
 
     controller.stop();
-    expect(streamAbortSpy).toHaveBeenCalledOnce();
+    expect(streamAbortSpies.some((spy) => spy.mock.calls.length === 1)).toBe(true);
   });
 });

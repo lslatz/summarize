@@ -210,7 +210,8 @@ export async function waitForSettingsHydratedHook(page: Page) {
       ).__summarizeTestHooks;
       return (
         typeof hooks?.getSettingsHydrated === "function" &&
-        typeof hooks?.getChatEnabled === "function"
+        typeof hooks?.getChatEnabled === "function" &&
+        hooks.getSettingsHydrated() === true
       );
     },
     null,
