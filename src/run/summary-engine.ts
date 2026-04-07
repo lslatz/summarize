@@ -3,6 +3,7 @@ import { createMarkdownStreamer, render as renderMarkdownAnsi } from "markdansi"
 import type { CliProvider } from "../config.js";
 import { isCliDisabled, runCliModel } from "../llm/cli.js";
 import { streamTextWithModelId } from "../llm/generate-text.js";
+import { resolveGitHubModelsApiKey } from "../llm/github-models.js";
 import { parseGatewayStyleModelId } from "../llm/model-id.js";
 import type { Prompt } from "../llm/prompt.js";
 import { formatCompactCount } from "../tty/format.js";
@@ -39,7 +40,15 @@ export type SummaryEngineDeps = {
   resolveMaxOutputTokensForCall: (modelId: string) => Promise<number | null>;
   resolveMaxInputTokensForCall: (modelId: string) => Promise<number | null>;
   llmCalls: Array<{
-    provider: "xai" | "openai" | "google" | "anthropic" | "zai" | "nvidia" | "cli";
+    provider:
+      | "xai"
+      | "openai"
+      | "google"
+      | "anthropic"
+      | "zai"
+      | "nvidia"
+      | "github-copilot"
+      | "cli";
     model: string;
     usage: Awaited<ReturnType<typeof summarizeWithModelId>>["usage"] | null;
     costUsd?: number | null;
@@ -103,6 +112,15 @@ export function createSummaryEngine(deps: SummaryEngineDeps) {
         forceChatCompletions: true,
       };
     }
+    if (modelIdLower.startsWith("github-copilot/")) {
+      return {
+        ...attempt,
+        openaiApiKeyOverride: resolveGitHubModelsApiKey(deps.envForRun),
+        openaiBaseUrlOverride:
+          attempt.openaiBaseUrlOverride ?? "https://models.github.ai/inference",
+        forceChatCompletions: true,
+      };
+    }
     return attempt;
   };
 
@@ -133,6 +151,9 @@ export function createSummaryEngine(deps: SummaryEngineDeps) {
     }
     if (requiredEnv === "OPENAI_API_KEY") {
       return Boolean(deps.apiKeys.openaiApiKey);
+    }
+    if (requiredEnv === "GITHUB_TOKEN") {
+      return Boolean(resolveGitHubModelsApiKey(deps.envForRun));
     }
     if (requiredEnv === "NVIDIA_API_KEY") {
       return Boolean(deps.nvidia.apiKey);

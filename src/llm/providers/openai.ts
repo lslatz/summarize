@@ -19,6 +19,15 @@ export type OpenAiClientConfigInput = {
   forceChatCompletions?: boolean;
 };
 
+function isGitHubModelsBaseUrl(baseUrl: string | undefined): boolean {
+  if (!baseUrl) return false;
+  try {
+    return new URL(baseUrl).host === "models.github.ai";
+  } catch {
+    return false;
+  }
+}
+
 export function resolveOpenAiClientConfig({
   apiKeys,
   forceOpenRouter,
@@ -100,6 +109,101 @@ function extractOpenAiResponseText(payload: {
   return text;
 }
 
+function extractChatCompletionText(payload: {
+  choices?: Array<{
+    message?: {
+      content?: unknown;
+    };
+  }>;
+}): string {
+  const choices = Array.isArray(payload.choices) ? payload.choices : [];
+  const content = choices[0]?.message?.content;
+  if (typeof content === "string") return content.trim();
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((part) => {
+      if (!part || typeof part !== "object") return "";
+      const record = part as Record<string, unknown>;
+      return typeof record.text === "string" ? record.text : "";
+    })
+    .join("")
+    .trim();
+}
+
+function contextToChatCompletionMessages(
+  context: Context,
+): Array<{ role: string; content: string }> {
+  const messages: Array<{ role: string; content: string }> = [];
+  const systemPrompt = context.systemPrompt?.trim();
+  if (systemPrompt) {
+    messages.push({ role: "system", content: systemPrompt });
+  }
+  for (const message of context.messages) {
+    const content =
+      typeof message.content === "string"
+        ? message.content.trim()
+        : Array.isArray(message.content)
+          ? message.content
+              .map((part) => (part.type === "text" ? part.text : ""))
+              .join("")
+              .trim()
+          : "";
+    if (!content) continue;
+    messages.push({ role: message.role, content });
+  }
+  return messages;
+}
+
+async function completeGitHubModelsText({
+  modelId,
+  openaiConfig,
+  context,
+  temperature,
+  maxOutputTokens,
+  signal,
+}: {
+  modelId: string;
+  openaiConfig: OpenAiClientConfig;
+  context: Context;
+  temperature?: number;
+  maxOutputTokens?: number;
+  signal: AbortSignal;
+}): Promise<{ text: string; usage: LlmTokenUsage | null }> {
+  const baseUrl = openaiConfig.baseURL ?? "https://models.github.ai/inference";
+  const url = new URL("chat/completions", baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
+  const response = await globalThis.fetch(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${openaiConfig.apiKey}`,
+      ...(openaiConfig.extraHeaders ?? {}),
+    },
+    body: JSON.stringify({
+      model: modelId,
+      messages: contextToChatCompletionMessages(context),
+      ...(typeof maxOutputTokens === "number" ? { max_tokens: maxOutputTokens } : {}),
+      ...(typeof temperature === "number" ? { temperature } : {}),
+    }),
+    signal,
+  });
+
+  const bodyText = await response.text();
+  if (!response.ok) {
+    const error = new Error(`OpenAI API error (${response.status}).`);
+    (error as { statusCode?: number }).statusCode = response.status;
+    (error as { responseBody?: string }).responseBody = bodyText;
+    throw error;
+  }
+
+  const data = JSON.parse(bodyText) as {
+    choices?: Array<{ message?: { content?: unknown } }>;
+    usage?: unknown;
+  };
+  const text = extractChatCompletionText(data);
+  if (!text) throw new Error(`LLM returned an empty summary (model openai/${modelId}).`);
+  return { text, usage: normalizeOpenAiUsage(data.usage) };
+}
+
 export async function completeOpenAiText({
   modelId,
   openaiConfig,
@@ -115,6 +219,16 @@ export async function completeOpenAiText({
   maxOutputTokens?: number;
   signal: AbortSignal;
 }): Promise<{ text: string; usage: LlmTokenUsage | null }> {
+  if (isGitHubModelsBaseUrl(openaiConfig.baseURL)) {
+    return completeGitHubModelsText({
+      modelId,
+      openaiConfig,
+      context,
+      temperature,
+      maxOutputTokens,
+      signal,
+    });
+  }
   const model = resolveOpenAiModel({ modelId, context, openaiConfig });
   const result = await completeSimple(model, context, {
     ...(typeof temperature === "number" ? { temperature } : {}),

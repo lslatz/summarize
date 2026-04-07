@@ -92,7 +92,10 @@ export function streamUsageWithTimeout({
 }
 
 function isOpenaiGpt5Model(provider: string, model: string): boolean {
-  return provider === "openai" && /^gpt-5([-.].+)?$/i.test(model);
+  return (
+    (provider === "openai" && /^gpt-5([-.].+)?$/i.test(model)) ||
+    (provider === "github-copilot" && /^openai\/gpt-5([-.].+)?$/i.test(model))
+  );
 }
 
 export function resolveEffectiveTemperature({

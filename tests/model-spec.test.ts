@@ -123,4 +123,14 @@ describe("model spec parsing", () => {
     expect(nvidia.requiredEnv).toBe("NVIDIA_API_KEY");
     expect(nvidia.llmModelId).toBe("nvidia/z-ai/glm5");
   });
+
+  it("parses github-copilot model ids as native gateway models", () => {
+    const parsed = parseRequestedModelId("github-copilot/gpt-4.1");
+    expect(parsed.kind).toBe("fixed");
+    expect(parsed.transport).toBe("native");
+    expect(parsed.provider).toBe("github-copilot");
+    expect(parsed.requiredEnv).toBe("GITHUB_TOKEN");
+    expect(parsed.llmModelId).toBe("github-copilot/openai/gpt-4.1");
+    expect(parsed.forceChatCompletions).toBe(true);
+  });
 });

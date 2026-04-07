@@ -38,9 +38,12 @@ describe("llm provider capabilities", () => {
 
   it("tracks native provider capabilities centrally", () => {
     expect(requiredEnvForGatewayProvider("google")).toBe("GEMINI_API_KEY");
+    expect(requiredEnvForGatewayProvider("github-copilot")).toBe("GITHUB_TOKEN");
     expect(supportsDocumentAttachments("google")).toBe(true);
+    expect(supportsDocumentAttachments("github-copilot")).toBe(false);
     expect(supportsDocumentAttachments("xai")).toBe(false);
     expect(supportsStreaming("anthropic")).toBe(true);
+    expect(supportsStreaming("github-copilot")).toBe(true);
     expect(isVideoUnderstandingCapableModelId("google/gemini-3-flash")).toBe(true);
     expect(isVideoUnderstandingCapableModelId("openai/gpt-5.2")).toBe(false);
   });
@@ -55,6 +58,7 @@ describe("llm provider capabilities", () => {
       ),
     ).toBe(true);
     expect(envHasRequiredKey({ ZAI_API_KEY: "z" }, "Z_AI_API_KEY")).toBe(true);
+    expect(envHasRequiredKey({ GH_TOKEN: "gh" }, "GITHUB_TOKEN")).toBe(true);
     expect(envHasRequiredKey({}, "OPENAI_API_KEY")).toBe(false);
   });
 
@@ -68,6 +72,7 @@ describe("llm provider capabilities", () => {
     expect(resolveRequiredEnvForModelId("nvidia/meta/llama-3.1-8b-instruct")).toBe(
       "NVIDIA_API_KEY",
     );
+    expect(resolveRequiredEnvForModelId("github-copilot/gpt-4.1")).toBe("GITHUB_TOKEN");
 
     expect(
       resolveOpenAiCompatibleClientConfigForProvider({
@@ -81,6 +86,24 @@ describe("llm provider capabilities", () => {
       baseURL: "https://api.z.ai/api/paas/v4",
       useChatCompletions: true,
       isOpenRouter: false,
+    });
+
+    expect(
+      resolveOpenAiCompatibleClientConfigForProvider({
+        provider: "github-copilot",
+        openaiApiKey: "gh-token",
+        openrouterApiKey: null,
+        openaiBaseUrlOverride: null,
+      }),
+    ).toEqual({
+      apiKey: "gh-token",
+      baseURL: "https://models.github.ai/inference",
+      useChatCompletions: true,
+      isOpenRouter: false,
+      extraHeaders: {
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2026-03-10",
+      },
     });
   });
 
@@ -103,5 +126,13 @@ describe("llm provider capabilities", () => {
         openaiBaseUrlOverride: null,
       }),
     ).toThrow(/Missing NVIDIA_API_KEY/);
+    expect(() =>
+      resolveOpenAiCompatibleClientConfigForProvider({
+        provider: "github-copilot",
+        openaiApiKey: null,
+        openrouterApiKey: null,
+        openaiBaseUrlOverride: null,
+      }),
+    ).toThrow(/Missing GITHUB_TOKEN/);
   });
 });

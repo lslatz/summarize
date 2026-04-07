@@ -75,6 +75,40 @@ describe("daemon/chat", () => {
     expect(events.some((evt) => evt.event === "metrics")).toBe(true);
   });
 
+  it("routes github-copilot overrides through the GitHub Models gateway", async () => {
+    const home = mkdtempSync(join(tmpdir(), "summarize-daemon-chat-github-models-"));
+    const meta: Array<{ model?: string | null }> = [];
+
+    await streamChatResponse({
+      env: { HOME: home, GITHUB_TOKEN: "gh-token" },
+      fetchImpl: fetch,
+      session: {
+        id: "s-gh",
+        lastMeta: { model: null, modelLabel: null, inputSummary: null, summaryFromCache: null },
+      },
+      pageUrl: "https://example.com",
+      pageTitle: "Example",
+      pageContent: "Hello world",
+      messages: [{ role: "user", content: "Hi" }],
+      modelOverride: "github-copilot/gpt-4.1",
+      pushToSession: () => {},
+      emitMeta: (patch) => meta.push(patch),
+    });
+
+    const calls = (streamTextWithContext as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    const args = calls[calls.length - 1]?.[0] as {
+      modelId: string;
+      openaiBaseUrlOverride?: string | null;
+      forceChatCompletions?: boolean;
+      apiKeys?: { openaiApiKey?: string | null };
+    };
+    expect(args.modelId).toBe("github-copilot/openai/gpt-4.1");
+    expect(args.openaiBaseUrlOverride).toBe("https://models.github.ai/inference");
+    expect(args.forceChatCompletions).toBe(true);
+    expect(args.apiKeys?.openaiApiKey).toBe("gh-token");
+    expect(meta[0]?.model).toBe("github-copilot/openai/gpt-4.1");
+  });
+
   it("runs fixed CLI model overrides through the CLI transport", async () => {
     const home = mkdtempSync(join(tmpdir(), "summarize-daemon-chat-cli-fixed-"));
     const events: Array<{ event: string; data?: unknown }> = [];

@@ -1,9 +1,21 @@
 import type { CliProvider } from "../config.js";
+import {
+  buildGitHubModelsHeaders,
+  GITHUB_MODELS_BASE_URL,
+  resolveGitHubModelsApiKey,
+} from "./github-models.js";
 import { normalizeGatewayStyleModelId, parseGatewayStyleModelId } from "./model-id.js";
 import { resolveOpenAiClientConfig } from "./providers/openai.js";
 import type { OpenAiClientConfig } from "./providers/types.js";
 
-export type GatewayProvider = "xai" | "openai" | "google" | "anthropic" | "zai" | "nvidia";
+export type GatewayProvider =
+  | "xai"
+  | "openai"
+  | "google"
+  | "anthropic"
+  | "zai"
+  | "nvidia"
+  | "github-copilot";
 
 export type RequiredModelEnv =
   | "XAI_API_KEY"
@@ -13,6 +25,7 @@ export type RequiredModelEnv =
   | "ANTHROPIC_API_KEY"
   | "OPENROUTER_API_KEY"
   | "Z_AI_API_KEY"
+  | "GITHUB_TOKEN"
   | "CLI_CLAUDE"
   | "CLI_CODEX"
   | "CLI_GEMINI"
@@ -60,6 +73,12 @@ const GATEWAY_PROVIDER_PROFILES: Record<GatewayProvider, GatewayProviderProfile>
   },
   nvidia: {
     requiredEnv: "NVIDIA_API_KEY",
+    supportsDocuments: false,
+    supportsStreaming: true,
+    supportsVideoUnderstanding: false,
+  },
+  "github-copilot": {
+    requiredEnv: "GITHUB_TOKEN",
     supportsDocuments: false,
     supportsStreaming: true,
     supportsVideoUnderstanding: false,
@@ -143,6 +162,9 @@ export function envHasRequiredKey(
   if (requiredEnv === "Z_AI_API_KEY") {
     return Boolean(env.Z_AI_API_KEY?.trim() || env.ZAI_API_KEY?.trim());
   }
+  if (requiredEnv === "GITHUB_TOKEN") {
+    return Boolean(resolveGitHubModelsApiKey(env));
+  }
   return Boolean(env[requiredEnv]?.trim());
 }
 
@@ -176,7 +198,7 @@ export function resolveOpenAiCompatibleClientConfigForProvider({
   openaiBaseUrlOverride,
   forceChatCompletions,
 }: {
-  provider: "openai" | "zai" | "nvidia";
+  provider: "openai" | "zai" | "nvidia" | "github-copilot";
   openaiApiKey: string | null;
   openrouterApiKey: string | null;
   forceOpenRouter?: boolean;
@@ -193,6 +215,19 @@ export function resolveOpenAiCompatibleClientConfigForProvider({
       openaiBaseUrlOverride,
       forceChatCompletions,
     });
+  }
+  if (provider === "github-copilot") {
+    const apiKey = openaiApiKey;
+    if (!apiKey) {
+      throw new Error("Missing GITHUB_TOKEN (or GH_TOKEN) for github-copilot/... model");
+    }
+    return {
+      apiKey,
+      baseURL: openaiBaseUrlOverride ?? GITHUB_MODELS_BASE_URL,
+      useChatCompletions: true,
+      isOpenRouter: false,
+      extraHeaders: buildGitHubModelsHeaders(),
+    };
   }
 
   const apiKey = openaiApiKey;

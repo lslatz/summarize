@@ -1,5 +1,6 @@
 import type { CliProvider } from "./config.js";
 import { normalizeGatewayStyleModelId, parseGatewayStyleModelId } from "./llm/model-id.js";
+import type { LlmProvider } from "./llm/model-id.js";
 import {
   type RequiredModelEnv,
   requiredEnvForCliProvider,
@@ -20,7 +21,7 @@ export type FixedModelSpec =
       transport: "native";
       userModelId: string;
       llmModelId: string;
-      provider: "xai" | "openai" | "google" | "anthropic" | "zai" | "nvidia";
+      provider: LlmProvider;
       openrouterProviders: string[] | null;
       forceOpenRouter: false;
       requiredEnv:
@@ -29,7 +30,8 @@ export type FixedModelSpec =
         | "GEMINI_API_KEY"
         | "ANTHROPIC_API_KEY"
         | "Z_AI_API_KEY"
-        | "NVIDIA_API_KEY";
+        | "NVIDIA_API_KEY"
+        | "GITHUB_TOKEN";
       openaiBaseUrlOverride?: string | null;
       forceChatCompletions?: boolean;
     }
@@ -129,6 +131,26 @@ export function parseRequestedModelId(raw: string): RequestedModel {
     };
   }
 
+  if (lower.startsWith("github-copilot/")) {
+    const model = trimmed.slice("github-copilot/".length).trim();
+    if (model.length === 0) {
+      throw new Error("Invalid model id: github-copilot/… is missing the model id");
+    }
+    const userModelId = normalizeGatewayStyleModelId(`github-copilot/${model}`);
+    return {
+      kind: "fixed",
+      transport: "native",
+      userModelId,
+      llmModelId: userModelId,
+      provider: "github-copilot",
+      openrouterProviders: null,
+      forceOpenRouter: false,
+      requiredEnv: "GITHUB_TOKEN",
+      openaiBaseUrlOverride: "https://models.github.ai/inference",
+      forceChatCompletions: true,
+    };
+  }
+
   if (lower.startsWith("cli/")) {
     const parts = trimmed
       .split("/")
@@ -197,6 +219,7 @@ export function parseRequestedModelId(raw: string): RequestedModel {
     | "ANTHROPIC_API_KEY"
     | "Z_AI_API_KEY"
     | "NVIDIA_API_KEY"
+    | "GITHUB_TOKEN"
   >;
   return {
     kind: "fixed",
