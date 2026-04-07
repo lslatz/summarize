@@ -6,6 +6,7 @@ import type { CliConfig, CliProvider } from "../config.js";
 import type { ExecFileFn } from "../markitdown.js";
 import { execCliWithInput } from "./cli-exec.js";
 import {
+  parseCodexOutputFromJsonl,
   isJsonCliProvider,
   parseCodexUsageFromJsonl,
   parseOpenCodeOutputFromJsonl,
@@ -172,8 +173,7 @@ export async function runCliModel({
       "agent",
       "--agent",
       requestedModel ?? "main",
-      "--message",
-      prompt,
+      "-",
       "--json",
       "--timeout",
       String(Math.max(1, Math.ceil(timeoutMs / 1000))),
@@ -182,7 +182,7 @@ export async function runCliModel({
       execFileImpl: execFileFn,
       cmd: binary,
       args: openclawArgs,
-      input: "",
+      input: prompt,
       timeoutMs,
       env: effectiveEnv,
       cwd,
@@ -258,6 +258,13 @@ export async function runCliModel({
     }
     if (fileText) {
       return { text: fileText, usage, costUsd };
+    }
+    const parsedStdout = parseCodexOutputFromJsonl(stdout);
+    if (parsedStdout.text) {
+      return { text: parsedStdout.text, usage, costUsd };
+    }
+    if (parsedStdout.sawStructuredEvent) {
+      throw new Error("CLI returned empty output");
     }
     const stdoutText = stdout.trim();
     if (stdoutText) {

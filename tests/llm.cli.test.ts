@@ -448,7 +448,7 @@ describe("runCliModel", () => {
     expect(result.text).toBe("from stdout");
   });
 
-  it("parses Codex JSONL usage + cost when present", async () => {
+  it("parses Codex JSONL usage + cost even when stdout has no assistant text", async () => {
     const execFileImpl = makeStub(() => ({
       stdout: [
         JSON.stringify({
@@ -464,20 +464,18 @@ describe("runCliModel", () => {
       ].join("\n"),
     }));
 
-    const result = await runCliModel({
-      provider: "codex",
-      prompt: "Test",
-      model: "gpt-5.2",
-      allowTools: false,
-      timeoutMs: 1000,
-      env: {},
-      execFileImpl,
-      config: null,
-    });
-
-    expect(result.text).toContain("{");
-    expect(result.usage).toEqual({ promptTokens: 5, completionTokens: 6, totalTokens: 11 });
-    expect(result.costUsd).toBe(0.5);
+    await expect(
+      runCliModel({
+        provider: "codex",
+        prompt: "Test",
+        model: "gpt-5.2",
+        allowTools: false,
+        timeoutMs: 1000,
+        env: {},
+        execFileImpl,
+        config: null,
+      }),
+    ).rejects.toThrow("CLI returned empty output");
   });
 
   it("throws when Codex returns no output file and empty stdout", async () => {

@@ -157,6 +157,125 @@ export const parseCodexUsageFromJsonl = (
   return { usage, costUsd };
 };
 
+function extractCodexTextFromContentBlocks(blocks: unknown): string | null {
+  if (!Array.isArray(blocks)) return null;
+  const text = blocks
+    .flatMap((block) => {
+      if (!block || typeof block !== "object") return [];
+      const record = block as Record<string, unknown>;
+      if (typeof record.text === "string" && record.text.trim().length > 0) {
+        return [record.text];
+      }
+      const nested = record.content;
+      if (!Array.isArray(nested)) return [];
+      return nested
+        .map((part) => {
+          if (!part || typeof part !== "object") return "";
+          const partRecord = part as Record<string, unknown>;
+          return typeof partRecord.text === "string" ? partRecord.text : "";
+        })
+        .filter((part) => part.trim().length > 0);
+    })
+    .join("");
+  return text.trim().length > 0 ? text.trim() : null;
+}
+
+function extractCodexTextEvent(parsed: Record<string, unknown>): {
+  deltaText: string | null;
+  fullText: string | null;
+} {
+  const type = typeof parsed.type === "string" ? parsed.type : "";
+  if (type === "response.output_text.delta" && typeof parsed.delta === "string") {
+    return { deltaText: parsed.delta, fullText: null };
+  }
+  if (type === "response.output_text.done") {
+    const text =
+      typeof parsed.text === "string"
+        ? parsed.text
+        : typeof parsed.delta === "string"
+          ? parsed.delta
+          : null;
+    return { deltaText: null, fullText: text };
+  }
+  if (typeof parsed.output_text === "string" && parsed.output_text.trim().length > 0) {
+    return { deltaText: null, fullText: parsed.output_text.trim() };
+  }
+
+  const response = parsed.response;
+  if (response && typeof response === "object") {
+    const responseRecord = response as Record<string, unknown>;
+    if (
+      typeof responseRecord.output_text === "string" &&
+      responseRecord.output_text.trim().length > 0
+    ) {
+      return { deltaText: null, fullText: responseRecord.output_text.trim() };
+    }
+    const responseOutput = extractCodexTextFromContentBlocks(responseRecord.output);
+    if (responseOutput) {
+      return { deltaText: null, fullText: responseOutput };
+    }
+  }
+
+  const message = parsed.message;
+  if (message && typeof message === "object") {
+    const messageOutput = extractCodexTextFromContentBlocks([message as Record<string, unknown>]);
+    if (messageOutput) {
+      return { deltaText: null, fullText: messageOutput };
+    }
+  }
+
+  const item = parsed.item;
+  if (item && typeof item === "object") {
+    const itemOutput = extractCodexTextFromContentBlocks([item as Record<string, unknown>]);
+    if (itemOutput) {
+      return { deltaText: null, fullText: itemOutput };
+    }
+  }
+
+  return { deltaText: null, fullText: null };
+}
+
+export function parseCodexOutputFromJsonl(output: string): {
+  text: string | null;
+  sawStructuredEvent: boolean;
+} {
+  const trimmed = output.trim();
+  if (!trimmed) {
+    return { text: null, sawStructuredEvent: false };
+  }
+
+  const lines = trimmed
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  const deltaParts: string[] = [];
+  let fullText: string | null = null;
+  let sawStructuredEvent = false;
+
+  for (const line of lines) {
+    if (!line.startsWith("{")) continue;
+    try {
+      const parsed = JSON.parse(line) as Record<string, unknown>;
+      sawStructuredEvent = true;
+      const { deltaText, fullText: eventFullText } = extractCodexTextEvent(parsed);
+      if (typeof deltaText === "string" && deltaText.length > 0) {
+        deltaParts.push(deltaText);
+        continue;
+      }
+      if (!fullText && typeof eventFullText === "string" && eventFullText.length > 0) {
+        fullText = eventFullText;
+      }
+    } catch {
+      // ignore malformed JSON lines
+    }
+  }
+
+  const deltaText = deltaParts.join("").trim();
+  if (deltaText) return { text: deltaText, sawStructuredEvent };
+  if (fullText) return { text: fullText, sawStructuredEvent };
+  return { text: null, sawStructuredEvent };
+}
+
 function parseOpenCodeTokens(payload: Record<string, unknown>): LlmTokenUsage | null {
   const tokens = payload.tokens;
   if (!tokens || typeof tokens !== "object") return null;

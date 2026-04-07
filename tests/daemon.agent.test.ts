@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync, chmodSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AssistantMessage, Tool } from "@mariozechner/pi-ai";
@@ -59,6 +59,12 @@ const makeModel = (provider: string, modelId: string) => ({
 });
 
 const makeTempHome = () => mkdtempSync(join(tmpdir(), "summarize-daemon-agent-"));
+
+const writeHomeConfig = (home: string, config: unknown) => {
+  const configDir = join(home, ".summarize");
+  mkdirSync(configDir, { recursive: true });
+  writeFileSync(join(configDir, "config.json"), JSON.stringify(config, null, 2), "utf8");
+};
 
 const makeFakeCliBin = (binary: string) => {
   const dir = mkdtempSync(join(tmpdir(), `summarize-daemon-cli-${binary}-`));
@@ -147,6 +153,59 @@ describe("daemon/agent", () => {
     expect(model.api).toBe("openai-completions");
     expect(model.baseUrl).toBe("http://127.0.0.1:1234/v1");
     expect(options.apiKey).toBe("sk-openai");
+  });
+
+  it("uses chat completions for known openai models when OPENAI_BASE_URL is custom", async () => {
+    const home = makeTempHome();
+
+    await completeAgentResponse({
+      env: {
+        HOME: home,
+        OPENAI_API_KEY: "sk-openai",
+        OPENAI_BASE_URL: "http://127.0.0.1:1234/v1",
+      },
+      pageUrl: "https://example.com",
+      pageTitle: null,
+      pageContent: "Hello world",
+      messages: [{ role: "user", content: "Hi" }],
+      modelOverride: "openai/gpt-5-mini",
+      tools: [],
+      automationEnabled: false,
+    });
+
+    const model = mockCompleteSimple.mock.calls[0]?.[0] as {
+      api: string;
+      baseUrl?: string;
+    };
+    expect(model.baseUrl).toBe("http://127.0.0.1:1234/v1");
+    expect(model.api).toBe("openai-completions");
+  });
+
+  it("uses chat completions for known openai models when config enables them", async () => {
+    const home = makeTempHome();
+    writeHomeConfig(home, {
+      model: { id: "openai/gpt-5-mini" },
+      openai: { useChatCompletions: true },
+    });
+
+    await completeAgentResponse({
+      env: {
+        HOME: home,
+        OPENAI_API_KEY: "sk-openai",
+      },
+      pageUrl: "https://example.com",
+      pageTitle: null,
+      pageContent: "Hello world",
+      messages: [{ role: "user", content: "Hi" }],
+      modelOverride: "openai/gpt-5-mini",
+      tools: [],
+      automationEnabled: false,
+    });
+
+    const model = mockCompleteSimple.mock.calls[0]?.[0] as {
+      api: string;
+    };
+    expect(model.api).toBe("openai-completions");
   });
 
   it("throws a helpful error when openrouter key is missing", async () => {
