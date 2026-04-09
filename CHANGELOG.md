@@ -2,6 +2,10 @@
 
 ## 0.13.1 - UNRELEASED
 
+### Fixes
+
+- Spotify podcasts: skip encrypted Spotify embed audio, fall back to publisher RSS enclosures, and surface podcast transcription failures instead of summarizing a bare URL.
+
 ## 0.13.0 - 2026-04-08
 
 ### Features

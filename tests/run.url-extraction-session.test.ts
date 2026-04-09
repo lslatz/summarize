@@ -209,4 +209,22 @@ describe("createUrlExtractionSession", () => {
 
     expect(fetchLinkContentWithBirdTip.mock.calls[0]?.[0]?.options.mediaTranscript).toBe("prefer");
   });
+
+  it("surfaces podcast extraction errors instead of falling back to empty URL-only content", async () => {
+    const ctx = createCtx();
+    const session = createUrlExtractionSession({
+      ctx: ctx as never,
+      markdown: {
+        convertHtmlToMarkdown: vi.fn(),
+        effectiveMarkdownMode: "off",
+        markdownRequested: false,
+      },
+      onProgress: null,
+    });
+    fetchLinkContentWithBirdTip.mockRejectedValueOnce(new Error("transcript failed"));
+
+    await expect(session.fetchWithCache("https://open.spotify.com/episode/abc")).rejects.toThrow(
+      /transcript failed/,
+    );
+  });
 });
