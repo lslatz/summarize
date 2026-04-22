@@ -1,0 +1,64 @@
+{
+  "channels": [
+    {
+      "id": "dwarkesh",
+      "name": "Dwarkesh Patel Podcast",
+      "url": "https://www.youtube.com/@DwarkeshPatel",
+      "markdown_file": "dwarkesh-patel-youtube.md"
+    },
+    {
+      "id": "simnett",
+      "name": "Simnett Nutrition",
+      "url": "https://www.youtube.com/@SimnettNutrition",
+      "markdown_file": "simnett-nutrition-youtube.md"
+    },
+    {
+      "id": "plantstrong",
+      "name": "PlantStrong Podcast",
+      "url": "https://www.youtube.com/@PlantStrongPodcast",
+      "markdown_file": "plantstrong-youtube.md"
+    },
+    {
+      "id": "jane-esselstyn",
+      "name": "Plant-Based with Jane Esselstyn and Ann Esselstyn",
+      "url": "https://www.youtube.com/@JaneEsselstyn",
+      "markdown_file": "jane-esselstyn-youtube.md"
+    },
+    {
+      "id": "no-priors",
+      "name": "No Priors Podcast",
+      "url": "https://www.youtube.com/@NoPriorsPodcast",
+      "markdown_file": "no-priors-youtube.md"
+    },
+    {
+      "id": "lex-fridman",
+      "name": "Lex Fridman Podcast",
+      "url": "https://www.youtube.com/@lexfridman",
+      "markdown_file": "lex-fridman-youtube.md"
+    },
+    {
+      "id": "joel-fuhrman",
+      "name": "Joel Fuhrman",
+      "url": "https://www.youtube.com/@drfuhrman",
+      "markdown_file": "joel-fuhrman-youtube.md"
+    },
+    {
+      "id": "derek-sarno",
+      "name": "Derek Sarno Chef",
+      "url": "https://www.youtube.com/@DerekSarnoChef",
+      "markdown_file": "derek-sarno-chef-youtube.md"
+    },
+    {
+      "id": "nutrition-facts",
+      "name": "NutritionFacts (Dr. Michael Greger)",
+      "url": "https://www.youtube.com/@NutritionFactsOrg",
+      "markdown_file": "nutrition-facts-youtube.md"
+    },
+    {
+      "id": "rich-roll",
+      "name": "Rich Roll",
+      "url": "https://www.youtube.com/@richroll",
+      "markdown_file": "rich-roll-youtube.md"
+    }
+  ]
+}
