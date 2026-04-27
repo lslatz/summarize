@@ -34,7 +34,6 @@
 | 30 | Kori McClurg - Beyond Willpower: Why Self-Compassion Is the Secret to Transformation | 2025-09-18 | https://youtube.com/watch?v=p6OnYpoKAWk |
 | 31 | Dora Ramirez - Cooking Authentic Mexican Food Without the Meat or Dairy | 2025-09-11 | https://youtube.com/watch?v=i_n4c8aautI |
 | 32 | Kathy Stevens - Founder of Catskill Animal Sanctuary on Retirement and a Legacy of Love | 2025-09-04 | https://youtube.com/watch?v=GBdyQPfATFI |
-| 33 | Real People. Real Change. \| PLANTSTRONG by Metabite Success Stories |  | https://youtube.com/watch?v=E3YqxQm90rE |
 | 34 | Adam Sud - Carbs are Not the Enemy…Unraveling Insulin Resistance | 2025-08-28 | https://youtube.com/watch?v=N7kJY2KXV14 |
 | 35 | Tyler Dodge - From Anxiety and ED to Long-Lasting Vitality | 2025-08-21 | https://youtube.com/watch?v=cA2FhSg4iFQ |
 | 36 | Dr. Luella Jonk - Advice That Can Save Your Relationships | 2025-08-14 | https://youtube.com/watch?v=HBWcx1rPZlk |
@@ -102,3 +101,5 @@
 | 98 | Ep. 275: Bringing the Power of Plants to Your Workplace with Michael Quarshie and David Goldman o... | 2024-11-14 | https://youtube.com/watch?v=JN2OfR9GqxU |
 | 99 | Breaking Up With Olive Oil with Dr. Monica Aggarwal | 2024-11-07 | https://youtube.com/watch?v=uRVQ0JgkLdw |
 | 100 | Ep. 274: Breaking Up With Olive Oil with Dr. Monica Aggarwal | 2024-11-07 | https://youtube.com/watch?v=Ht5v1u-fpd0 |
+| 101 | Ali Essig - Her Husband Had a Stroke at 37. Why this Mom of Six Chose Plants to Help Her Family Heal | 2026-04-23 | https://youtube.com/watch?v=I_F1GETZ2Rw |
+| 102 | Ann Crile Esselstyn World Record Watch Party! | 2026-04-22 | https://youtube.com/watch?v=n2007Z0I69Q |

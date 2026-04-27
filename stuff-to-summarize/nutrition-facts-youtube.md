@@ -102,3 +102,6 @@
 | 98 | Randomized Controlled Trials of Taurine Supplementation in Humans | 2025-10-22 | https://youtube.com/watch?v=BHa3XvEJalY |
 | 99 | Taurine Supplementation Increases Lifespan and Healthspan in Animals | 2025-10-20 | https://youtube.com/watch?v=VapwYoWklQk |
 | 100 | Friday Favorites: How to Treat Body Odor with Diet | 2025-10-17 | https://youtube.com/watch?v=4DOw-q4afGw |
+| 101 | Friday Favorites: Improving VO2 Max - A Look at Vegetarian and Vegan Athletes | 2026-04-24 | https://youtube.com/watch?v=kNfICF0GByg |
+| 102 | Podcast: Are Statins Worth It? (Part 1) | 2026-04-23 | https://youtube.com/watch?v=DymHdANLdoM |
+| 103 | How Ultra-Processed Foods Could Cause Disease: Industrial Contaminants | 2026-04-22 | https://youtube.com/watch?v=8Mr6KMbvKdg |
